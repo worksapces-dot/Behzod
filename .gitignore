@@ -1,0 +1,18 @@
+# --- Environment ---
+.env
+.env.local
+.env.production
+
+# --- Packages ---
+node_modules/
+bun.lock
+
+# --- Builds & Tmp ---
+dist/
+tmp/
+.gemini/
+
+# --- IDEs ---
+.vscode/
+.idea/
+.DS_Store
