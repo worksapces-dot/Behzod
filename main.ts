@@ -43,6 +43,11 @@ async function main() {
   const behzodAgent = await createBehzodAgent();
   Logger.info("Behzod ready.");
 
+  // Welcome message for DMs
+  bot.command("start", (ctx) => {
+    ctx.reply("Salom! Men Behzod, sizning texnik yordam agentingizman. Menga istalgan savolingizni bering! 👋");
+  });
+
   bot.on("message:text", async (ctx) => {
     const rawText = ctx.message.text;
     const fromUser = ctx.from.username || ctx.from.first_name || "Unknown";
@@ -65,7 +70,9 @@ async function main() {
     const isMentioned = rawText.includes(`@${botUsername}`);
     const hasTrigger = isBehzodTriggered(rawText);
 
-    const { threadId, shouldRespond } = getSession(chatId, userId, isPrivate || hasTrigger || isMentioned || isReplyToMe);
+    // In DMs, always respond. In groups, check triggers
+    const shouldTrigger = isPrivate || hasTrigger || isMentioned || isReplyToMe;
+    const { threadId, shouldRespond } = getSession(chatId, userId, shouldTrigger);
     if (!shouldRespond) return;
 
     const cleanText = cleanMessage(rawText, botUsername);

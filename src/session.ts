@@ -58,12 +58,12 @@ export function getSession(chatId: string, userId: string, isTriggered: boolean)
   // 2. Determine activation logic
   let shouldRespond = false;
 
-  // Activation check: Manually triggered (mentioned "Behzod")
+  // Activation check: Manually triggered (mentioned "Behzod" or DM)
   if (isTriggered) {
     session.isActive = true;
     session.lastActivatedAt = now;
     shouldRespond = true;
-    Logger.session("CONTINUE", key, "Activated by trigger");
+    Logger.session("CONTINUE", key, "Activated by trigger or DM");
   } 
   // Continuance check: Is it still within the ACTIVE_TTL?
   else if (session.isActive && session.lastActivatedAt) {
