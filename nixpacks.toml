@@ -2,7 +2,10 @@
 nixPkgs = ["bun"]
 
 [phases.install]
-cmds = ["bun install"]
+cmds = ["bun install --frozen-lockfile"]
+
+[phases.build]
+cmds = ["echo 'Build complete'"]
 
 [start]
-cmd = "bun run main.ts"
+cmd = "bun run start"
