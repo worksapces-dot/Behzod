@@ -19,8 +19,8 @@ const requiredEnvVars = [
 ];
 
 const optionalButRecommended = [
-  "UPSTASH_REDIS_URL",
-  "UPSTASH_REDIS_TOKEN"
+  "UPSTASH_REDIS_REST_URL",
+  "UPSTASH_REDIS_REST_TOKEN"
 ];
 
 for (const envVar of requiredEnvVars) {
@@ -71,10 +71,15 @@ async function main() {
   Logger.startup();
 
   Logger.info("Initializing Behzod v2.1 (Performance Stabilized)...");
+  
+  // Test API connections
+  Logger.info("Testing API connections...");
+  const { testConnections } = await import("./src/config");
+  await testConnections();
+  
   const behzodAgent = await createBehzodAgent();
   Logger.info("Behzod ready.");
 
-  // Welcome message for DMs
   bot.command("start", (ctx) => {
     ctx.reply("Salom! Men Behzod 👋\n\nMen Stok uz kompaniyasining qo'llab-quvvatlash xizmati vakilim. Sizga qanday yordam bera olaman?");
   });
@@ -104,10 +109,20 @@ async function main() {
     // In DMs, always respond. In groups, check triggers
     const shouldTrigger = isPrivate || hasTrigger || isMentioned || isReplyToMe;
     const { threadId, shouldRespond } = getSession(chatId, userId, shouldTrigger);
+    
+    // Log ALL messages (DM and Group)
+    const chatName = isPrivate ? "Direct Message" : (ctx.chat.title || "Group Chat");
+    Logger.message(
+      isPrivate ? "DM" : "GROUP",
+      fromUser,
+      chatName,
+      rawText,
+      shouldRespond
+    );
+    
     if (!shouldRespond) return;
 
     const cleanText = cleanMessage(rawText, botUsername);
-    Logger.box("Chat", [`User: @${fromUser}`, `Query: "${cleanText.substring(0, 50)}"`], "magenta");
 
     ctx.replyWithChatAction("typing").catch(() => {});
 
@@ -135,29 +150,39 @@ async function main() {
       }
     } catch (error: any) {
       processedUpdates.delete(updateId); 
-      Logger.error(`Behzod Brain Error: ${error.message}`, error.stack);
+      
+      // Detailed error logging
+      console.error("=== FULL ERROR DETAILS ===");
+      console.error("Error message:", error.message);
+      console.error("Error name:", error.name);
+      if (error.stack) console.error("Stack trace:", error.stack);
+      if (error.cause) console.error("Cause:", error.cause);
+      if (error.code) console.error("Error code:", error.code);
+      console.error("========================");
+      
+      Logger.error(`Behzod Brain Error: ${error.message}`);
       
       // Better error messages in both languages
       let userError = "Uzr, ichki xatolik yuz berdi. / Извините, произошла внутренняя ошибка.";
       
-      if (error.message.includes("rate_limit")) {
+      if (error.message.includes("rate_limit") || error.message.includes("429")) {
         userError = "Hozirda so'rovlar juda ko'p. Iltimos, 1 daqiqadan so'ng urinib ko'ring. ⏳\n\nСлишком много запросов. Пожалуйста, попробуйте через минуту.";
       } else if (error.message.includes("timeout")) {
         userError = "Server javob berishga ulgurmadi. Iltimos, qaytadan yozing. 🔄\n\nСервер не успел ответить. Пожалуйста, попробуйте снова.";
-      } else if (error.message.includes("network") || error.message.includes("fetch")) {
+      } else if (error.message.includes("network") || error.message.includes("fetch") || error.message.includes("url") || error.message.includes("port")) {
         userError = "Tarmoq xatoligi. Iltimos, qaytadan urinib ko'ring. 🌐\n\nОшибка сети. Пожалуйста, попробуйте снова.";
+        Logger.error("Network error detected. Possible causes: Redis, Mem0, or Groq connection issue.");
+      } else if (error.message.includes("ECONNREFUSED") || error.message.includes("ENOTFOUND")) {
+        userError = "Xizmat bilan bog'lanib bo'lmadi. Iltimos, keyinroq urinib ko'ring.\n\nНе удалось подключиться к сервису. Попробуйте позже.";
+        Logger.error("Connection refused. Check if Redis/Groq/Supermemory services are accessible.");
       }
       
       await ctx.reply(userError).catch(() => {});
     }
   });
 
-  bot.start({
-    onStart: (me) => Logger.info(`🤖 Bot @${me.username} online via Long Polling.`),
-  });
-
   // Simplified Dashboard & Webhook Handler
-  new Elysia()
+  const app = new Elysia()
     .get("/", () => {
       const history = Logger.getHistory().map(l => l.replace(/\x1b\[[0-9;]*m/g, "")).join("<br>");
       return new Response(`<html><body style="background:#0a0a0a;color:#4ade80;font-family:monospace">
@@ -173,6 +198,15 @@ async function main() {
           this.cancel = () => unsub();
         }
       });
+    })
+    .post("/telegram-webhook", async ({ body }: { body: any }) => {
+      try {
+        await bot.handleUpdate(body);
+        return new Response("OK");
+      } catch (error: any) {
+        Logger.error(`Telegram webhook error: ${error.message}`);
+        return new Response("OK");
+      }
     })
     .head("/trello-webhook", () => new Response("OK"))
     .post("/trello-webhook", async ({ body }: { body: any }) => {
@@ -220,6 +254,30 @@ async function main() {
       return new Response("OK");
     })
     .listen(BOT_CONFIG.PORT);
+
+  // Setup Telegram Webhook
+  const webhookUrl = process.env.WEBHOOK_URL;
+  if (webhookUrl) {
+    try {
+      // Initialize bot first
+      await bot.init();
+      await bot.api.setWebhook(`${webhookUrl}/telegram-webhook`);
+      Logger.info(`✅ Webhook set: ${webhookUrl}/telegram-webhook`);
+      Logger.info(`🚀 Bot running in WEBHOOK mode (instant delivery)`);
+    } catch (error: any) {
+      Logger.error(`Failed to set webhook: ${error.message}`);
+      Logger.info(`Falling back to polling mode...`);
+      bot.start({
+        onStart: (me) => Logger.info(`🤖 Bot @${me.username} online via Long Polling (fallback).`),
+      });
+    }
+  } else {
+    Logger.info(`⚠️ WEBHOOK_URL not set. Using polling mode.`);
+    Logger.info(`   For better performance, set WEBHOOK_URL in .env`);
+    bot.start({
+      onStart: (me) => Logger.info(`🤖 Bot @${me.username} online via Long Polling.`),
+    });
+  }
 }
 
 main().catch(err => Logger.error("Fatal Startup Error", err));

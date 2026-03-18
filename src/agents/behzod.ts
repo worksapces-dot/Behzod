@@ -7,18 +7,24 @@ import { getUserProfile, saveUserInfo } from "../tools/user_memory";
 import { createTrelloCard, getIssueStatus } from "../composio";
 import { Logger } from "../logger";
 
-// Initialize Redis checkpointer
-const redisUrl = process.env.UPSTASH_REDIS_URL || "";
-const redisToken = process.env.UPSTASH_REDIS_TOKEN || "";
+// Initialize Redis checkpointer with proper REST API env vars
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL || "";
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || "";
 
 let checkpointer: UpstashRedisSaver | MemorySaver;
 
 if (redisUrl && redisToken) {
-  checkpointer = new UpstashRedisSaver(redisUrl, redisToken);
-  Logger.info("✅ Using Upstash Redis for persistent memory");
+  try {
+    checkpointer = new UpstashRedisSaver(redisUrl, redisToken);
+    Logger.info("✅ Using Upstash Redis for persistent memory (REST API)");
+  } catch (e: any) {
+    Logger.error(`Failed to initialize Redis: ${e.message}`);
+    Logger.info("Falling back to MemorySaver");
+    checkpointer = new MemorySaver();
+  }
 } else {
-  Logger.error("⚠️ UPSTASH_REDIS_URL or UPSTASH_REDIS_TOKEN missing! Conversations won't persist on restart.");
-  Logger.error("Get free Redis at: https://console.upstash.com/");
+  Logger.info("⚠️ UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN missing");
+  Logger.info("   Using MemorySaver (conversations will be lost on restart)");
   checkpointer = new MemorySaver();
 }
 
@@ -42,9 +48,7 @@ Your Goal: texnik muammolarni hal qilish, foydalanuvchilarga yordam berish va xa
 2. Use 'search_company' for technical/product/sales knowledge. 
 3. **LANGUAGE**: Detect user's language and respond in the SAME language (Uzbek or Russian). If user writes in Uzbek, respond in Uzbek. If user writes in Russian, respond in Russian.
 4. Use 'get_issue_status' if the user asks about the progress of a bug.
-5. **Company Name**: You work for "Stok uz" company. 
-   - In Uzbek: "Men Stok uz kompaniyasining qo'llab-quvvatlash xizmati vakilim."
-   - In Russian: "Я представитель службы поддержки компании Stok uz."
+5. **Company Name**: You work for "Stok uz" company. Only introduce yourself with "Men Stok uz kompaniyasining qo'llab-quvvatlash xizmati vakilim" on the FIRST message or when asked who you are. Don't repeat it in every message.
 
 ## Issue Reporting Process (CRITICAL):
 When a user reports a bug or issue, you MUST gather detailed information before creating a Trello card:
@@ -99,6 +103,7 @@ Language: {Uzbek/Russian}
 2. **HELPFUL**: Guide users to explain their issues clearly with specific questions.
 3. **NATURAL**: Speak naturally in user's language (Uzbek or Russian). Be friendly and casual.
 4. **ADAPTIVE**: Match the user's language automatically.
+5. **CONCISE**: Keep responses short (2-3 sentences max). Don't repeat your introduction unless asked.
 `,
   });
 

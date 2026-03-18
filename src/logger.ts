@@ -12,6 +12,13 @@ const colors = {
   red: "\x1b[31m",
   magenta: "\x1b[35m",
   gray: "\x1b[90m",
+  white: "\x1b[37m",
+  bgBlue: "\x1b[44m",
+  bgGreen: "\x1b[42m",
+  bgYellow: "\x1b[43m",
+  bgRed: "\x1b[41m",
+  bgMagenta: "\x1b[45m",
+  bgCyan: "\x1b[46m",
 };
 
 const events = new EventEmitter();
@@ -32,10 +39,10 @@ export const Logger = {
     return () => events.off("log", cb);
   },
 
-  divider: () => pushLog(colors.gray + "—".repeat(60) + colors.reset),
+  divider: () => pushLog(colors.gray + "─".repeat(80) + colors.reset),
 
   box: (title: string, lines: string[], color: keyof typeof colors = "cyan") => {
-    const width = 64;
+    const width = 80;
     const c = colors[color] || colors.cyan;
     let b = "";
     b += "\n" + c + "╔" + "═".repeat(width - 2) + "╗" + colors.reset + "\n";
@@ -51,30 +58,69 @@ export const Logger = {
 
   startup: () => {
     pushLog(colors.cyan + colors.bright + `
-    ██████╗ ███████╗██╗  ██╗███████╗ ██████╗ ██████╗ 
-    ██╔══██╗██╔════╝██║  ██║╚══███╔╝██╔═══██╗██╔══██╗
-    ██████╔╝█████╗  ███████║  ███╔╝ ██║   ██║██║  ██║
-    ██╔══██╗██╔══╝  ██╔══██║ ███╔╝  ██║   ██║██║  ██║
-    ██████╔╝███████╗██║  ██║███████╗╚██████╔╝██████╔╝
-    ╚═════╝ ╚══════╝╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═════╝ 
-    ` + colors.reset + colors.dim + `
-           v2.0 Support Agent — Online & Ready
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║   ██████╗ ███████╗██╗  ██╗███████╗ ██████╗ ██████╗     ██╗  ██╗            ║
+║   ██╔══██╗██╔════╝██║  ██║╚══███╔╝██╔═══██╗██╔══██╗   ███║ ███║            ║
+║   ██████╔╝█████╗  ███████║  ███╔╝ ██║   ██║██║  ██║   ╚██║ ╚██║            ║
+║   ██╔══██╗██╔══╝  ██╔══██║ ███╔╝  ██║   ██║██║  ██║    ██║  ██║            ║
+║   ██████╔╝███████╗██║  ██║███████╗╚██████╔╝██████╔╝    ██║  ██║            ║
+║   ╚═════╝ ╚══════╝╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═════╝     ╚═╝  ╚═╝            ║
+║                                                                              ║
+║   ███████╗██╗  ██╗███████╗██████╗ ███████╗ ██████╗ ██████╗                 ║
+║   ██╔════╝██║  ██║██╔════╝██╔══██╗╚══███╔╝██╔═══██╗██╔══██╗                ║
+║   ███████╗███████║█████╗  ██████╔╝  ███╔╝ ██║   ██║██║  ██║                ║
+║   ╚════██║██╔══██║██╔══╝  ██╔══██╗ ███╔╝  ██║   ██║██║  ██║                ║
+║   ███████║██║  ██║███████╗██║  ██║███████╗╚██████╔╝██████╔╝                ║
+║   ╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═════╝                 ║
+║                                                                              ║
+║                    🤖 AI Support Agents - v2.1                               ║
+║                    Powered by Groq + LangGraph                               ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
     ` + colors.reset);
   },
 
+  message: (type: "DM" | "GROUP", username: string, chatName: string, text: string, responded: boolean) => {
+    const typeColor = type === "DM" ? colors.bgBlue : colors.bgMagenta;
+    const typeLabel = type === "DM" ? " 💬 DM " : " 👥 GROUP ";
+    const statusIcon = responded ? "✅" : "⏭️";
+    const statusColor = responded ? colors.green : colors.gray;
+    
+    let log = "\n";
+    log += colors.bright + typeColor + colors.white + typeLabel + colors.reset + " ";
+    log += colors.cyan + `@${username}` + colors.reset;
+    if (type === "GROUP") {
+      log += colors.dim + ` in ${chatName}` + colors.reset;
+    }
+    log += "\n";
+    log += colors.yellow + "📝 Message: " + colors.reset + colors.dim + text.substring(0, 100) + (text.length > 100 ? "..." : "") + colors.reset + "\n";
+    log += statusColor + statusIcon + " " + (responded ? "Responded" : "Ignored") + colors.reset + "\n";
+    
+    pushLog(log);
+  },
+
   session: (type: "NEW" | "CONTINUE", key: string, detail: string) => {
-    const color = type === "NEW" ? "\x1b[32m" : "\x1b[34m";
-    const label = type === "NEW" ? "✨ [SESSION:NEW]" : "🔄 [SESSION:ACT]";
-    pushLog(`${color}${label.padEnd(20)}${colors.reset} ${colors.dim}Key:${colors.reset} ${key.padEnd(20)} ${colors.dim}| Info:${colors.reset} ${detail}`);
+    const color = type === "NEW" ? colors.green : colors.blue;
+    const icon = type === "NEW" ? "✨" : "🔄";
+    const label = type === "NEW" ? "[SESSION:NEW]" : "[SESSION:ACTIVE]";
+    pushLog(`${color}${colors.bright}${icon} ${label.padEnd(20)}${colors.reset} ${colors.dim}Key:${colors.reset} ${key.padEnd(20)} ${colors.dim}| Info:${colors.reset} ${detail}`);
   },
 
   tool: (name: string, query: string, status: "START" | "DONE" | "ERROR", detail?: string) => {
     let color = colors.yellow;
+    let icon = "🔧";
     let label = `[TOOL:${name.toUpperCase()}]`;
-    if (status === "DONE") color = colors.green;
-    if (status === "ERROR") color = colors.red;
+    if (status === "DONE") {
+      color = colors.green;
+      icon = "✅";
+    }
+    if (status === "ERROR") {
+      color = colors.red;
+      icon = "❌";
+    }
     const statusPart = status === "START" ? colors.dim + "..." : status === "DONE" ? "✅" : "❌";
-    pushLog(`${color}${colors.bright}${label.padEnd(20)}${colors.reset} ${statusPart} ${colors.dim}q:${colors.reset} "${query}" ${detail ? `${colors.dim}>>${colors.reset} ${detail}` : ""}`);
+    pushLog(`${color}${colors.bright}${icon} ${label.padEnd(25)}${colors.reset} ${statusPart} ${colors.dim}q:${colors.reset} "${query.substring(0, 40)}" ${detail ? `${colors.dim}>>${colors.reset} ${detail}` : ""}`);
   },
 
   info: (msg: string) => {
@@ -86,3 +132,4 @@ export const Logger = {
     if (err) console.error(err);
   }
 };
+
