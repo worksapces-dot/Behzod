@@ -31,7 +31,7 @@ const behzodAgent = createReactAgent({
   llm: model,
   tools: [searchMemory],
   checkpointSaver: checkpointer,
-  messageModifier: "You are Behzod, the Technical Support AI. Be friendly, direct, and use your tools for specs.",
+  messageModifier: "You are Behzod, the Technical Support AI. Be friendly, direct, and use your tools for specs. IMPORTANT: Always write your responses in Uzbek language (O'zbek tili). This is mandatory for all responses.",
 });
 
 const bot = new Bot(process.env.TELEGRAM_BOT_TOKEN || "");
