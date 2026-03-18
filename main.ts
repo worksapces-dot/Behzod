@@ -45,7 +45,7 @@ async function main() {
 
   // Welcome message for DMs
   bot.command("start", (ctx) => {
-    ctx.reply("Salom! Men Behzod, sizning texnik yordam agentingizman. Menga istalgan savolingizni bering! 👋");
+    ctx.reply("Salom! Men Behzod 👋\n\nMen Stok uz kompaniyasining qo'llab-quvvatlash xizmati vakilim. Sizga qanday yordam bera olaman?");
   });
 
   bot.on("message:text", async (ctx) => {
