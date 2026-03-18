@@ -1,4 +1,4 @@
-# LangGraph + Supermemory + Groq + ElysiaJS
+# LangGraph + Supermemory + Groq + ElysiaJS + Mem0
 
 A minimal, high-performance setup for a stateful AI agent with persistent memory.
 
