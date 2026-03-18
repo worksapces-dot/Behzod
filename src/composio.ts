@@ -111,10 +111,10 @@ export const createTrelloCard = tool(
   },
   {
     name: "create_trello_card",
-    description: "Create or cluster a Trello issue. If a similar issue exists, it will be added as a comment to increase priority.",
+    description: "Create or cluster a Trello issue with detailed, structured information. IMPORTANT: Only call this after gathering complete details about the issue (what, where, when, error message, expected behavior, user goal). The description should be comprehensive and well-formatted.",
     schema: z.object({
-      name: z.string().describe("Concise title of the issue"),
-      description: z.string().describe("Full details of the report"),
+      name: z.string().describe("Concise title in English (e.g., 'Login button not working on admin panel')"),
+      description: z.string().describe("Detailed structured description with sections: Problem, Location, Timing, Error, Expected Result, User Goal, and Reporter Info. Use the template format with emojis and clear sections."),
       userId: z.string().optional().describe("The Telegram user ID of the reporter")
     }),
   }
