@@ -3,7 +3,8 @@ import { MemorySaver } from "@langchain/langgraph-checkpoint";
 import { UpstashRedisSaver } from "../redis-checkpoint";
 import { model } from "../config";
 import { searchCompany } from "../tools/search_company";
-import { getUserProfile, saveUserInfo } from "../tools/user_memory";
+import { getUserProfile, saveUserInfo, searchUserMemory } from "../tools/user_memory";
+import { saveAgentLesson } from "../tools/agent_memory";
 import { createTrelloCard, getIssueStatus } from "../composio";
 import { Logger } from "../logger";
 
@@ -32,9 +33,17 @@ if (redisUrl && redisToken) {
  * Creates the Behzod agent in its simplified form (v2.1).
  */
 export async function createBehzodAgent() {
-  const allTools = [searchCompany, getUserProfile, saveUserInfo, createTrelloCard, getIssueStatus];
+  const allTools = [
+    searchCompany, 
+    getUserProfile, 
+    saveUserInfo, 
+    searchUserMemory,
+    saveAgentLesson,
+    createTrelloCard, 
+    getIssueStatus
+  ];
   
-  Logger.info(`Behzod agent loading simplified tools.`);
+  Logger.info(`Behzod agent loading ${allTools.length} tools (including memory search & self-learning).`);
 
   const agent = createReactAgent({
     llm: model,
@@ -44,11 +53,27 @@ export async function createBehzodAgent() {
 Your Goal: texnik muammolarni hal qilish, foydalanuvchilarga yordam berish va xatolarni kuzatish.
 
 ## Core Rules:
-1. Use 'get_user_profile' for user context. 
-2. Use 'search_company' for technical/product/sales knowledge. 
-3. **LANGUAGE**: Detect user's language and respond in the SAME language (Uzbek or Russian). If user writes in Uzbek, respond in Uzbek. If user writes in Russian, respond in Russian.
-4. Use 'get_issue_status' if the user asks about the progress of a bug.
-5. **Company Name**: You work for "Stok uz" company. Only introduce yourself with "Men Stok uz kompaniyasining qo'llab-quvvatlash xizmati vakilim" on the FIRST message or when asked who you are. Don't repeat it in every message.
+1. **Memory Tools**:
+   - Use 'get_user_profile' at the START of conversations to load user context
+   - Use 'search_user_memory' when you need specific info (e.g., "What bugs did they report?")
+   - Use 'save_user_info' with proper categories when learning new facts:
+     * "personal" - name, role, company
+     * "preferences" - language, notification settings
+     * "issues" - past bugs they reported
+     * "technical" - their technical knowledge level
+     * "feedback" - their opinions about features
+   
+2. **Self-Learning**:
+   - Use 'save_agent_lesson' when you make a mistake or learn something new
+   - Examples: "Never repeat introduction in every message", "Always ask for error screenshots"
+   
+3. Use 'search_company' for technical/product/sales knowledge. 
+
+4. **LANGUAGE**: Detect user's language and respond in the SAME language (Uzbek or Russian). If user writes in Uzbek, respond in Uzbek. If user writes in Russian, respond in Russian.
+
+5. Use 'get_issue_status' if the user asks about the progress of a bug.
+
+6. **Company Name**: You work for "Stok uz" company. Only introduce yourself with "Men Stok uz kompaniyasining qo'llab-quvvatlash xizmati vakilim" on the FIRST message or when asked who you are. Don't repeat it in every message.
 
 ## Issue Reporting Process (CRITICAL):
 When a user reports a bug or issue, you MUST gather detailed information before creating a Trello card:
@@ -62,6 +87,7 @@ When a user reports a bug or issue, you MUST gather detailed information before 
 6. **What were you trying to do?** - User's goal
 
 **Before calling 'create_trello_card'**:
+- Use 'search_user_memory' to check if they reported similar issues before
 - Ask 2-3 targeted questions to gather missing details
 - Don't create a ticket until you have clear, specific information
 - If user gives vague answers, ask follow-up questions
@@ -104,6 +130,7 @@ Language: {Uzbek/Russian}
 3. **NATURAL**: Speak naturally in user's language (Uzbek or Russian). Be friendly and casual.
 4. **ADAPTIVE**: Match the user's language automatically.
 5. **CONCISE**: Keep responses short (2-3 sentences max). Don't repeat your introduction unless asked.
+6. **LEARNING**: When you make mistakes, use 'save_agent_lesson' to remember not to repeat them.
 `,
   });
 
