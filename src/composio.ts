@@ -3,34 +3,90 @@ import { z } from "zod";
 import { Logger } from "./logger";
 
 /**
- * Direct Trello Card Creation Tool
- * 
- * Uses the Trello REST API directly (no Composio middleware).
- * This is the most reliable way to create cards.
- * 
- * Requires TRELLO_API_KEY, TRELLO_TOKEN, and TRELLO_LIST_ID in .env
+ * Trello Integration — Behzod Smart Clustering v2
  */
 
 const TRELLO_API_KEY = process.env.TRELLO_API_KEY || "";
 const TRELLO_TOKEN = process.env.TRELLO_TOKEN || "";
 const TRELLO_LIST_ID = process.env.TRELLO_LIST_ID || "";
 
+// --- Helper Functions ---
+
+/**
+ * Simple similarity checker to detect duplicate issues
+ */
+function isSimilar(query: string, target: string): boolean {
+  const q = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+  const t = target.toLowerCase();
+  const matches = q.filter(word => t.includes(word));
+  return matches.length / q.length > 0.6; // 60% keyword overlap
+}
+
+/**
+ * Fetch all cards in the configured list
+ */
+async function getExistingCards() {
+  const url = `https://api.trello.com/1/lists/${TRELLO_LIST_ID}/cards?key=${TRELLO_API_KEY}&token=${TRELLO_TOKEN}&fields=name,desc,shortUrl,idList`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  return await res.json() as any[];
+}
+
+/**
+ * Add a "Another report" comment to a card
+ */
+async function addCommentToCard(cardId: string, text: string) {
+  const url = `https://api.trello.com/1/cards/${cardId}/actions/comments?key=${TRELLO_API_KEY}&token=${TRELLO_TOKEN}`;
+  await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: `➕ [NEW REPORT]: ${text}` }),
+  });
+}
+
+// --- Tools ---
+
 export const createTrelloCard = tool(
-  async ({ name, description }) => {
-    Logger.tool("create_trello_card", name, "START");
+  async ({ name, description, userId }) => {
+    Logger.tool("trello_sync", name, "START");
 
-    if (!TRELLO_API_KEY || !TRELLO_TOKEN) {
-      Logger.tool("create_trello_card", name, "ERROR", "Missing TRELLO_API_KEY or TRELLO_TOKEN");
-      return "Error: Trello API credentials are not configured.";
-    }
-
-    if (!TRELLO_LIST_ID) {
-      Logger.tool("create_trello_card", name, "ERROR", "Missing TRELLO_LIST_ID");
-      return "Error: Trello list ID is not configured.";
+    if (!TRELLO_API_KEY || !TRELLO_TOKEN || !TRELLO_LIST_ID) {
+      return "Trello not configured properly.";
     }
 
     try {
+      // 1. SMART CLUSTERING: Check for duplicates
+      const existing = await getExistingCards();
+      const duplicate = existing.find(c => isSimilar(name, c.name));
+
+      if (duplicate) {
+        Logger.tool("trello_sync", name, "DONE", `Duplicate clustered to: ${duplicate.shortUrl}`);
+        
+        // Update Reporters tag in description
+        let newDesc = duplicate.desc;
+        const reportersTag = /\[REPORTERS: ([\d,\s]+)\]/;
+        const match = newDesc.match(reportersTag);
+        
+        if (match && userId) {
+          const IDs = match[1].split(",").map((id: string) => id.trim());
+          if (!IDs.includes(userId)) {
+            newDesc = newDesc.replace(reportersTag, `[REPORTERS: ${match[1]}, ${userId}]`);
+            // Update the card description in Trello
+            await fetch(`https://api.trello.com/1/cards/${duplicate.id}?key=${TRELLO_API_KEY}&token=${TRELLO_TOKEN}`, {
+               method: "PUT",
+               headers: { "Content-Type": "application/json" },
+               body: JSON.stringify({ desc: newDesc })
+            });
+          }
+        }
+
+        await addCommentToCard(duplicate.id, description);
+        return `I found a matching issue already in our system! I've added your report to the existing card so the engineers see the priority increase.\nCard: ${duplicate.shortUrl}`;
+      }
+
+      // 2. CREATE NEW CARD: If no duplicate found
       const url = `https://api.trello.com/1/cards?key=${TRELLO_API_KEY}&token=${TRELLO_TOKEN}`;
+      const finalDesc = `${description}\n\n[REPORTERS: ${userId || "unknown"}]`;
       
       const res = await fetch(url, {
         method: "POST",
@@ -38,33 +94,61 @@ export const createTrelloCard = tool(
         body: JSON.stringify({
           idList: TRELLO_LIST_ID,
           name: name,
-          desc: description,
+          desc: finalDesc,
           pos: "top",
         }),
       });
 
       const data = await res.json() as any;
+      if (!res.ok) throw new Error(data?.message || "Trello Error");
 
-      if (!res.ok) {
-        const errMsg = data?.message || JSON.stringify(data);
-        Logger.tool("create_trello_card", name, "ERROR", `${res.status}: ${errMsg}`);
-        return `Failed to create Trello card: ${errMsg}`;
-      }
-
-      const cardUrl = data.shortUrl || data.url || "";
-      Logger.tool("create_trello_card", name, "DONE", `Card created: ${cardUrl}`);
-      return `Trello card created successfully!\nTitle: "${data.name}"\nURL: ${cardUrl}`;
+      Logger.tool("trello_sync", name, "DONE", `New unique issue recorded: ${data.shortUrl}`);
+      return `New issue recorded successfully!\nURL: ${data.shortUrl}`;
     } catch (e: any) {
-      Logger.tool("create_trello_card", name, "ERROR", e.message);
-      return `Error creating Trello card: ${e.message}`;
+      Logger.tool("trello_sync", name, "ERROR", e.message);
+      return `Error: ${e.message}`;
     }
   },
   {
     name: "create_trello_card",
-    description: "Create a new Trello card in the Issue list to track a bug or user-reported problem. Use this after gathering issue details and getting user confirmation.",
+    description: "Create or cluster a Trello issue. If a similar issue exists, it will be added as a comment to increase priority.",
     schema: z.object({
-      name: z.string().describe("A clear, concise title for the issue card"),
-      description: z.string().describe("Full issue details: user info, device, description, severity, steps to reproduce"),
+      name: z.string().describe("Concise title of the issue"),
+      description: z.string().describe("Full details of the report"),
+      userId: z.string().optional().describe("The Telegram user ID of the reporter")
+    }),
+  }
+);
+
+/**
+ * Check the status of an issue
+ */
+export const getIssueStatus = tool(
+  async ({ query }) => {
+    Logger.tool("get_issue_status", query, "START");
+    try {
+      const cards = await getExistingCards();
+      const found = cards.find(c => isSimilar(query, c.name) || c.desc.includes(query));
+
+      if (!found) return "I couldn't find a matching issue in the active list.";
+
+      // Fetch list name (To see if it's in 'Doing', 'Done', etc)
+      const listUrl = `https://api.trello.com/1/lists/${found.idList}?key=${TRELLO_API_KEY}&token=${TRELLO_TOKEN}`;
+      const listRes = await fetch(listUrl);
+      const listData = await listRes.json() as any;
+
+      const status = listData.name || "Unknown";
+      Logger.tool("get_issue_status", query, "DONE", `Status: ${status}`);
+      return `Found issue: "${found.name}"\nStatus: [${status.toUpperCase()}]\nURL: ${found.shortUrl}`;
+    } catch (e: any) {
+      return `Error: ${e.message}`;
+    }
+  },
+  {
+    name: "get_issue_status",
+    description: "Check the progress of a previously reported issue by searching for keywords or card titles.",
+    schema: z.object({
+      query: z.string().describe("The issue title or key details to search for"),
     }),
   }
 );
