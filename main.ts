@@ -74,10 +74,16 @@ async function main() {
     ctx.replyWithChatAction("typing").catch(() => {});
 
     try {
+      Logger.info(`🧠 [BRAIN] Behzod is thinking... (Thread: ${threadId.substring(0, 8)})`);
+      const startTime = Date.now();
+      
       const result = await behzodAgent.invoke(
         { messages: [{ role: "user", content: `[User @${fromUser} (ID:${userId})] ${cleanText}` }] },
         { configurable: { thread_id: threadId } }
       );
+
+      const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+      Logger.info(`✅ [BRAIN] Thought completed in ${duration}s`);
 
       const rawReply = result.messages[result.messages.length - 1].content as string;
       const reply = cleanReply(rawReply);
@@ -85,11 +91,20 @@ async function main() {
       if (reply) {
         Logger.box("Reply", [reply], "green");
         await ctx.reply(reply, { reply_to_message_id: ctx.message.message_id });
+      } else {
+        Logger.error("Agent returned empty reply.");
+        await ctx.reply("System processed your message but had no verbal response. Try rephrasing.");
       }
     } catch (error: any) {
       processedUpdates.delete(updateId); 
-      Logger.error(`Behzod Brain Error: ${error.message}`);
-      await ctx.reply("Uzr, xatolik yuz berdi. Iltimos, birozdan so'ng xabar qoldiring.");
+      Logger.error(`Behzod Brain Error: ${error.message}`, error.stack);
+      
+      // Tell the user the specific error if it's a known one (e.g. Rate Limit)
+      let userError = "Uzr, ichki xatolik yuz berdi.";
+      if (error.message.includes("rate_limit")) userError = "Hozirda so'rovlar juda ko'p. Iltimos, 1 daqiqadan so'ng urinib ko'ring. ⏳";
+      if (error.message.includes("timeout")) userError = "Server javob berishga ulgurmadi. Iltimos, qaytadan yozing. 🔄";
+      
+      await ctx.reply(`${userError}\n\n(Error Info: ${error.message.substring(0, 50)}...)`);
     }
   });
 
