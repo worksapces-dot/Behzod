@@ -4,14 +4,45 @@ import { Elysia } from "elysia";
 import { createBehzodAgent } from "./src/agents/behzod";
 import { getSession } from "./src/session";
 import { Logger } from "./src/logger";
+import { BOT_CONFIG, SESSION_CONFIG } from "./src/constants";
+
+// Validate required environment variables
+const requiredEnvVars = [
+  "TELEGRAM_BOT_TOKEN",
+  "GROQ_API_KEY",
+  "SUPERMEMORY_API_KEY",
+  "MEM0_API_KEY",
+  "TRELLO_API_KEY",
+  "TRELLO_TOKEN",
+  "TRELLO_LIST_ID",
+  "TRELLO_DONE_LIST_ID"
+];
+
+const optionalButRecommended = [
+  "UPSTASH_REDIS_URL",
+  "UPSTASH_REDIS_TOKEN"
+];
+
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    Logger.error(`❌ Missing required environment variable: ${envVar}`);
+    process.exit(1);
+  }
+}
+
+// Warn about optional but important vars
+for (const envVar of optionalButRecommended) {
+  if (!process.env[envVar]) {
+    Logger.info(`⚠️ Optional: ${envVar} not set. Conversations won't persist on restart.`);
+    Logger.info(`   Get free Redis at: https://console.upstash.com/`);
+  }
+}
 
 const botToken = process.env.TELEGRAM_BOT_TOKEN || "";
-if (!botToken) throw new Error("TELEGRAM_BOT_TOKEN missing in .env");
-
 const bot = new Bot(botToken);
-const TRIGGERS = ["behzod", "begi"];
+const TRIGGERS = BOT_CONFIG.TRIGGERS;
 const processedUpdates = new Set<number>();
-const MAX_TRACKED = 1000;
+const MAX_TRACKED = SESSION_CONFIG.MAX_TRACKED_UPDATES;
 
 function isBehzodTriggered(text: string): boolean {
   if (!text) return false;
@@ -106,12 +137,18 @@ async function main() {
       processedUpdates.delete(updateId); 
       Logger.error(`Behzod Brain Error: ${error.message}`, error.stack);
       
-      // Tell the user the specific error if it's a known one (e.g. Rate Limit)
-      let userError = "Uzr, ichki xatolik yuz berdi.";
-      if (error.message.includes("rate_limit")) userError = "Hozirda so'rovlar juda ko'p. Iltimos, 1 daqiqadan so'ng urinib ko'ring. ⏳";
-      if (error.message.includes("timeout")) userError = "Server javob berishga ulgurmadi. Iltimos, qaytadan yozing. 🔄";
+      // Better error messages in both languages
+      let userError = "Uzr, ichki xatolik yuz berdi. / Извините, произошла внутренняя ошибка.";
       
-      await ctx.reply(`${userError}\n\n(Error Info: ${error.message.substring(0, 50)}...)`);
+      if (error.message.includes("rate_limit")) {
+        userError = "Hozirda so'rovlar juda ko'p. Iltimos, 1 daqiqadan so'ng urinib ko'ring. ⏳\n\nСлишком много запросов. Пожалуйста, попробуйте через минуту.";
+      } else if (error.message.includes("timeout")) {
+        userError = "Server javob berishga ulgurmadi. Iltimos, qaytadan yozing. 🔄\n\nСервер не успел ответить. Пожалуйста, попробуйте снова.";
+      } else if (error.message.includes("network") || error.message.includes("fetch")) {
+        userError = "Tarmoq xatoligi. Iltimos, qaytadan urinib ko'ring. 🌐\n\nОшибка сети. Пожалуйста, попробуйте снова.";
+      }
+      
+      await ctx.reply(userError).catch(() => {});
     }
   });
 
@@ -139,28 +176,50 @@ async function main() {
     })
     .head("/trello-webhook", () => new Response("OK"))
     .post("/trello-webhook", async ({ body }: { body: any }) => {
-      const action = body?.action;
-      const card = action?.data?.card;
-      const listAfter = action?.data?.listAfter;
-      const DONE_LIST_ID = process.env.TRELLO_DONE_LIST_ID;
-      
-      if (action?.type === "updateCard" && listAfter?.id === DONE_LIST_ID) {
-        Logger.info(`🎯 [TRELLO] Bug Fixed! Notifying reporters for "${card?.name}"`);
-        const TRELLO_KEY = process.env.TRELLO_API_KEY;
-        const TRELLO_TOKEN = process.env.TRELLO_TOKEN;
-        const cardRes = await fetch(`https://api.trello.com/1/cards/${card.id}?key=${TRELLO_KEY}&token=${TRELLO_TOKEN}`);
-        const cardData = await cardRes.json() as any;
-        const match = (cardData.desc || "").match(/\[REPORTERS: ([\d,\s]+)\]/);
-        if (match) {
-          const IDs = match[1].split(",").map((id: string) => id.trim()).filter((id: string) => id !== "unknown");
-          for (const uid of IDs) {
-            bot.api.sendMessage(uid, `<b>🎉 Yaxshi xabar!</b>\n\nSiz xabar bergan muammo hal qilindi:\n«<i>${card.name}</i>»\n\nYordamingiz uchun rahmat! 🙏`, { parse_mode: "HTML" }).catch(() => {});
+      try {
+        const action = body?.action;
+        const card = action?.data?.card;
+        const listAfter = action?.data?.listAfter;
+        const DONE_LIST_ID = process.env.TRELLO_DONE_LIST_ID;
+        
+        if (action?.type === "updateCard" && listAfter?.id === DONE_LIST_ID) {
+          Logger.info(`🎯 [TRELLO] Bug Fixed! Notifying reporters for "${card?.name}"`);
+          const TRELLO_KEY = process.env.TRELLO_API_KEY;
+          const TRELLO_TOKEN = process.env.TRELLO_TOKEN;
+          
+          const cardRes = await fetch(`https://api.trello.com/1/cards/${card.id}?key=${TRELLO_KEY}&token=${TRELLO_TOKEN}`);
+          if (!cardRes.ok) {
+            Logger.error("Failed to fetch card details from Trello");
+            return new Response("OK");
+          }
+          
+          const cardData = await cardRes.json() as any;
+          const match = (cardData.desc || "").match(/\[REPORTERS: ([\d,\s]+)\]/);
+          
+          if (match) {
+            const IDs = match[1].split(",").map((id: string) => id.trim()).filter((id: string) => id !== "unknown");
+            
+            for (const uid of IDs) {
+              try {
+                await bot.api.sendMessage(
+                  uid, 
+                  `<b>🎉 Yaxshi xabar! / Хорошие новости!</b>\n\nSiz xabar bergan muammo hal qilindi:\n«<i>${card.name}</i>»\n\nВаша проблема решена:\n«<i>${card.name}</i>»\n\n✅ Yordamingiz uchun rahmat! / Спасибо за помощь!`, 
+                  { parse_mode: "HTML" }
+                );
+                Logger.info(`✅ Notified user ${uid}`);
+              } catch (notifyError: any) {
+                Logger.error(`Failed to notify user ${uid}: ${notifyError.message}`);
+              }
+            }
           }
         }
+      } catch (webhookError: any) {
+        Logger.error(`Webhook processing error: ${webhookError.message}`);
       }
+      
       return new Response("OK");
     })
-    .listen(3000);
+    .listen(BOT_CONFIG.PORT);
 }
 
 main().catch(err => Logger.error("Fatal Startup Error", err));

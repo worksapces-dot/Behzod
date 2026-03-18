@@ -1,6 +1,7 @@
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import { Logger } from "./logger";
+import { TRELLO_CONFIG } from "./constants";
 
 /**
  * Trello Integration — Behzod Smart Clustering v2
@@ -19,7 +20,7 @@ function isSimilar(query: string, target: string): boolean {
   const q = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
   const t = target.toLowerCase();
   const matches = q.filter(word => t.includes(word));
-  return matches.length / q.length > 0.6; // 60% keyword overlap
+  return matches.length / q.length > TRELLO_CONFIG.SIMILARITY_THRESHOLD;
 }
 
 /**

@@ -1,4 +1,5 @@
 import { EventEmitter } from "events";
+import { LOGGER_CONFIG } from "./constants";
 
 const colors = {
   reset: "\x1b[0m",
@@ -15,7 +16,7 @@ const colors = {
 
 const events = new EventEmitter();
 const history: string[] = [];
-const MAX_HISTORY = 100;
+const MAX_HISTORY = LOGGER_CONFIG.MAX_HISTORY;
 
 function pushLog(msg: string) {
   console.log(msg);

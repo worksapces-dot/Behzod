@@ -8,9 +8,10 @@
  */
 
 import { Logger } from "./logger";
+import { SESSION_CONFIG } from "./constants";
 
-const SESSION_TTL_MINUTES = 30; // Context lifespan
-const ACTIVE_TTL_SECONDS = 120; // Time AI stays "active" without mention (2 min)
+const SESSION_TTL_MINUTES = SESSION_CONFIG.TTL_MINUTES;
+const ACTIVE_TTL_SECONDS = SESSION_CONFIG.ACTIVE_TTL_SECONDS;
 
 interface Session {
   threadId: string;
