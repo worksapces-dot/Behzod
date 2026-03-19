@@ -120,6 +120,12 @@ Widget will be available at:
 - `https://your-domain.com/demo`
 - `https://your-domain.com/behzod-widget.js`
 
+## Dashboard Security
+
+- `/` and `/logs` are localhost-only by default
+- Set `ADMIN_DASHBOARD_TOKEN` to allow remote access
+- Pass the token as `?token=...` or `X-Admin-Token` when opening the dashboard remotely
+
 ## CORS (If Needed)
 
 If widget is on different domain:

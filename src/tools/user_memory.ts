@@ -83,7 +83,7 @@ export const saveUserInfo = tool(
       
       // Add metadata for better organization
       const metadata: any = {
-        source: "telegram_bot",
+        source: userId.startsWith("web_") ? "web_widget" : "telegram_bot",
         bot: "behzod",
         timestamp: new Date().toISOString(),
       };
@@ -185,7 +185,7 @@ export const searchUserMemory = tool(
       }
 
       const results = memories
-        .map((m: any, i: number) => `${i + 1}. ${m.memory || m.content || ""}`)
+        .map((m: any, i: number) => `${i + 1}. ${m.memory || m.content || ""} (ID: ${m.id || "unknown"})`)
         .join("\n");
       
       Logger.tool("search_user_memory", query, "DONE", `Found ${memories.length} results`);
@@ -267,7 +267,7 @@ export const searchRecentMemories = tool(
       }
 
       const results = memories
-        .map((m: any, i: number) => `${i + 1}. ${m.memory || m.content || ""}`)
+        .map((m: any, i: number) => `${i + 1}. ${m.memory || m.content || ""} (ID: ${m.id || "unknown"})`)
         .join("\n");
       
       Logger.tool("search_recent_memories", query, "DONE", `Found ${memories.length} recent results`);

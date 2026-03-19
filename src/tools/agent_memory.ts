@@ -5,6 +5,10 @@ import { Logger } from "../logger";
 const MEM0_BASE = "https://api.mem0.ai/v1";
 const MEM0_API_KEY = process.env.MEM0_API_KEY || "";
 const AGENT_ID = "behzod_agent_core";
+const LESSON_CACHE_TTL_MS = 60_000;
+
+let cachedLessons = "";
+let cachedLessonsFetchedAt = 0;
 
 function mem0Headers() {
   return {
@@ -17,6 +21,10 @@ function mem0Headers() {
  * Get all past behavioral lessons for the agent.
  */
 export async function getAgentLessons(): Promise<string> {
+  if (cachedLessonsFetchedAt && Date.now() - cachedLessonsFetchedAt < LESSON_CACHE_TTL_MS) {
+    return cachedLessons;
+  }
+
   try {
     const res = await fetch(`${MEM0_BASE}/memories/?user_id=${AGENT_ID}`, {
       method: "GET",
@@ -24,12 +32,18 @@ export async function getAgentLessons(): Promise<string> {
     });
     const data = await res.json() as any;
     const memories = Array.isArray(data) ? data : data.results || [];
-    if (memories.length === 0) return "No past behavior lessons stored yet.";
+    if (memories.length === 0) {
+      cachedLessons = "No past behavior lessons stored yet.";
+      cachedLessonsFetchedAt = Date.now();
+      return cachedLessons;
+    }
     
-    return memories.map((m: any) => `- ${m.memory || m.content || ""}`).join("\n");
+    cachedLessons = memories.map((m: any) => `- ${m.memory || m.content || ""}`).join("\n");
+    cachedLessonsFetchedAt = Date.now();
+    return cachedLessons;
   } catch (e: any) {
     Logger.error("Failed to fetch agent lessons from Mem0", e);
-    return "";
+    return cachedLessons;
   }
 }
 
@@ -53,6 +67,7 @@ export const saveAgentLesson = tool(
 
       if (!res.ok) return "Failed to save the lesson.";
       
+      cachedLessonsFetchedAt = 0;
       Logger.tool("save_agent_lesson", lesson, "DONE");
       return `Succesfully saved new behavior lesson: "${lesson}"`;
     } catch (e: any) {

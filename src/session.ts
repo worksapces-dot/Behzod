@@ -23,7 +23,7 @@ interface Session {
 const sessions = new Map<string, Session>();
 
 function generateThreadId(key: string): string {
-  return `behzod_${key}`;
+  return `behzod_${key}_${Date.now()}`;
 }
 
 /**

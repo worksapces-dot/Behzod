@@ -8,6 +8,8 @@
   
   const WIDGET_API = window.BEHZOD_API_URL || window.location.origin;
   const AGENT_AVATAR_SEED = window.BEHZOD_AVATAR_SEED || 'behzod-blue';
+  const SESSION_TOKEN_STORAGE_KEY = 'behzod_session_token';
+  const USER_AVATAR_SEED = window.BEHZOD_USER_AVATAR_SEED || 'user-self';
   
   // Create widget HTML
   const widgetHTML = `
@@ -442,11 +444,28 @@
     container.innerHTML = widgetHTML;
     document.body.appendChild(container);
     
-    // Get user ID from localStorage or generate new one
-    let userId = localStorage.getItem('behzod_user_id');
-    if (!userId) {
-      userId = 'web_' + Math.random().toString(36).substr(2, 9);
-      localStorage.setItem('behzod_user_id', userId);
+    let sessionToken = localStorage.getItem(SESSION_TOKEN_STORAGE_KEY) || '';
+
+    async function getSessionToken(forceRefresh = false) {
+      if (sessionToken && !forceRefresh) {
+        return sessionToken;
+      }
+
+      const headers = {};
+      if (sessionToken) {
+        headers['X-Session-Token'] = sessionToken;
+      }
+
+      const response = await fetch(`${WIDGET_API}/api/chat/session`, { headers });
+      const data = await response.json();
+
+      if (!response.ok || !data.sessionToken) {
+        throw new Error(data.error || 'Failed to initialize chat session');
+      }
+
+      sessionToken = data.sessionToken;
+      localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, sessionToken);
+      return sessionToken;
     }
     
     // Add animated avatar to button
@@ -502,11 +521,21 @@
       scrollToBottom();
       
       try {
-        const response = await fetch(`${WIDGET_API}/api/chat`, {
+        let token = await getSessionToken();
+        let response = await fetch(`${WIDGET_API}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, message })
+          body: JSON.stringify({ sessionToken: token, message })
         });
+
+        if (response.status === 401) {
+          token = await getSessionToken(true);
+          response = await fetch(`${WIDGET_API}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionToken: token, message })
+          });
+        }
         
         const data = await response.json();
         
@@ -539,7 +568,7 @@
         const avatar = window.createAgentAvatar(AGENT_AVATAR_SEED, 32, true);
         avatarDiv.appendChild(avatar);
       } else if (sender === 'user' && window.createAgentAvatar) {
-        const avatar = window.createAgentAvatar(userId, 32, true);
+        const avatar = window.createAgentAvatar(USER_AVATAR_SEED, 32, true);
         avatarDiv.appendChild(avatar);
       }
       

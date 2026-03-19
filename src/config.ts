@@ -10,7 +10,7 @@ export const model = new ChatGroq({
   apiKey: process.env.GROQ_API_KEY,
   temperature: 0,
   maxRetries: 3,
-  timeout: 30000, // 30 seconds timeout
+  timeout: 30000,
 });
 
 /**
@@ -29,6 +29,7 @@ export async function testConnections() {
   const results = {
     groq: false,
     supermemory: false,
+    mem0: false,
   };
 
   // Test Groq
@@ -47,6 +48,26 @@ export async function testConnections() {
     console.log("✅ Supermemory API: Connected");
   } catch (e: any) {
     console.error("❌ Supermemory API: Failed -", e.message);
+  }
+
+  // Test Mem0
+  try {
+    const res = await fetch("https://api.mem0.ai/v1/memories/?user_id=behzod_startup_check", {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Token ${process.env.MEM0_API_KEY || ""}`,
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    results.mem0 = true;
+    console.log("✅ Mem0 API: Connected");
+  } catch (e: any) {
+    console.error("❌ Mem0 API: Failed -", e.message);
   }
 
   return results;

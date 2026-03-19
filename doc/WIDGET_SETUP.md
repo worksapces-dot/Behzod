@@ -19,6 +19,25 @@ The Behzod chat widget allows you to embed AI-powered customer support directly 
 Website → Widget (JS) → HTTP API → Behzod Agent → Redis/Mem0/Trello
 ```
 
+## Voice (LiveKit)
+
+The Crisp-style widget (`/behzod-widget-crisp.js`) includes an `Ovoz` tab for voice chat via LiveKit.
+
+**Server env vars (optional):**
+- `LIVEKIT_URL` (example: `wss://YOUR_PROJECT.livekit.cloud`)
+- `LIVEKIT_API_KEY`
+- `LIVEKIT_API_SECRET`
+- `LIVEKIT_ROOM` (optional default room name, defaults to `behzod-voice`)
+
+**Client config (optional):**
+- `window.BEHZOD_LIVEKIT_ROOM` (overrides the room passed to the server token endpoint)
+- `window.BEHZOD_LIVEKIT_CLIENT_URL` (overrides the LiveKit browser client script URL; default uses unpkg)
+
+**Endpoint used by the widget:**
+- `GET /api/livekit/token` (requires `X-Session-Token` header from `/api/chat/session`)
+
+Note: LiveKit voice requires an AI voice agent/service to join the same room and publish audio back to the user.
+
 **Session Management:**
 - Each user gets a unique ID stored in localStorage
 - Sessions persist for 30 minutes of inactivity

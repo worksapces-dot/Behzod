@@ -33,6 +33,16 @@ async function getExistingCards() {
   return await res.json() as any[];
 }
 
+async function searchCards(query: string) {
+  const encodedQuery = encodeURIComponent(query);
+  const url = `https://api.trello.com/1/search?key=${TRELLO_API_KEY}&token=${TRELLO_TOKEN}&query=${encodedQuery}&modelTypes=cards&card_fields=name,desc,shortUrl,idList&cards_limit=15`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+
+  const data = await res.json() as any;
+  return Array.isArray(data?.cards) ? data.cards : [];
+}
+
 /**
  * Add a "Another report" comment to a card
  */
@@ -128,7 +138,13 @@ export const getIssueStatus = tool(
   async ({ query }) => {
     Logger.tool("get_issue_status", query, "START");
     try {
-      const cards = await getExistingCards();
+      const [cardsFromList, cardsFromSearch] = await Promise.all([
+        getExistingCards(),
+        searchCards(query),
+      ]);
+      const cards = [...cardsFromList, ...cardsFromSearch].filter(
+        (card, index, items) => items.findIndex((item) => item.id === card.id) === index
+      );
       const found = cards.find(c => isSimilar(query, c.name) || c.desc.includes(query));
 
       if (!found) return "I couldn't find a matching issue in the active list.";
