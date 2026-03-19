@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Behzod Chat Widget</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    
+    /* Widget Button */
+    #chat-widget-button {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: transform 0.2s;
+    }
+    
+    #chat-widget-button:hover { transform: scale(1.1); }
+    
+    #chat-widget-button svg {
+      width: 28px;
+      height: 28px;
+      fill: white;
+    }
+    
+    /* Chat Container */
+    #chat-widget-container {
+      position: fixed;
+      bottom: 90px;
+      right: 20px;
+      width: 380px;
+      height: 600px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+      display: none;
+      flex-direction: column;
+      z-index: 9998;
+      overflow: hidden;
+    }
+    
+    #chat-widget-container.open { display: flex; }
+    
+    /* Header */
+    .chat-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .chat-header h3 { font-size: 18px; font-weight: 600; }
+    .chat-header p { font-size: 12px; opacity: 0.9; margin-top: 4px; }
+    
+    .close-btn {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 20px;
+    }
+    
+    /* Messages */
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      background: #f7f8fa;
+    }
+    
+    .message {
+      margin-bottom: 16px;
+      display: flex;
+      gap: 8px;
+    }
+    
+    .message.user { flex-direction: row-reverse; }
+    
+    .message-content {
+      max-width: 70%;
+      padding: 12px 16px;
+      border-radius: 16px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    
+    .message.bot .message-content {
+      background: white;
+      color: #333;
+      border-bottom-left-radius: 4px;
+    }
+    
+    .message.user .message-content {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+    
+    .typing-indicator {
+      display: none;
+      padding: 12px 16px;
+      background: white;
+      border-radius: 16px;
+      width: fit-content;
+    }
+    
+    .typing-indicator.show { display: block; }
+    
+    .typing-indicator span {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #667eea;
+      margin: 0 2px;
+      animation: typing 1.4s infinite;
+    }
+    
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+    
+    @keyframes typing {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-10px); }
+    }
+    
+    /* Input */
+    .chat-input {
+      padding: 16px;
+      background: white;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      gap: 8px;
+    }
+    
+    .chat-input input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1px solid #e5e7eb;
+      border-radius: 24px;
+      font-size: 14px;
+      outline: none;
+    }
+    
+    .chat-input input:focus { border-color: #667eea; }
+    
+    .chat-input button {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .chat-input button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    @media (max-width: 480px) {
+      #chat-widget-container {
+        width: calc(100vw - 40px);
+        height: calc(100vh - 120px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Chat Widget Button -->
+  <button id="chat-widget-button" aria-label="Open chat">
+    <svg viewBox="0 0 24 24">
+      <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+    </svg>
+  </button>
+
+  <!-- Chat Container -->
+  <div id="chat-widget-container">
+    <div class="chat-header">
+      <div>
+        <h3>Behzod</h3>
+        <p>Stok uz qo'llab-quvvatlash</p>
+      </div>
+      <button class="close-btn" id="close-chat">&times;</button>
+    </div>
+    
+    <div class="chat-messages" id="chat-messages">
+      <div class="message bot">
+        <div class="message-content">
+          Assalomu alaykum! Men Behzod, sizga qanday yordam bera olaman? 👋
+        </div>
+      </div>
+    </div>
+    
+    <div class="typing-indicator" id="typing-indicator">
+      <span></span><span></span><span></span>
+    </div>
+    
+    <div class="chat-input">
+      <input 
+        type="text" 
+        id="chat-input" 
+        placeholder="Xabar yozing..."
+        autocomplete="off"
+      />
+      <button id="send-btn" aria-label="Send message">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+          <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = window.location.origin;
+    let userId = localStorage.getItem('behzod_user_id');
+    
+    if (!userId) {
+      userId = 'web_' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('behzod_user_id', userId);
+    }
+
+    const widgetButton = document.getElementById('chat-widget-button');
+    const widgetContainer = document.getElementById('chat-widget-container');
+    const closeBtn = document.getElementById('close-chat');
+    const chatMessages = document.getElementById('chat-messages');
+    const chatInput = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('send-btn');
+    const typingIndicator = document.getElementById('typing-indicator');
+
+    // Toggle chat
+    widgetButton.addEventListener('click', () => {
+      widgetContainer.classList.toggle('open');
+      if (widgetContainer.classList.contains('open')) {
+        chatInput.focus();
+      }
+    });
+
+    closeBtn.addEventListener('click', () => {
+      widgetContainer.classList.remove('open');
+    });
+
+    // Send message
+    async function sendMessage() {
+      const message = chatInput.value.trim();
+      if (!message) return;
+
+      // Add user message
+      addMessage(message, 'user');
+      chatInput.value = '';
+      sendBtn.disabled = true;
+
+      // Show typing indicator
+      typingIndicator.classList.add('show');
+      scrollToBottom();
+
+      try {
+        const response = await fetch(`${API_URL}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, message })
+        });
+
+        const data = await response.json();
+        
+        // Hide typing indicator
+        typingIndicator.classList.remove('show');
+        
+        // Add bot response
+        addMessage(data.response, 'bot');
+        
+      } catch (error) {
+        console.error('Chat error:', error);
+        typingIndicator.classList.remove('show');
+        addMessage('Xatolik yuz berdi. Qaytadan urinib ko\'ring.', 'bot');
+      } finally {
+        sendBtn.disabled = false;
+        chatInput.focus();
+      }
+    }
+
+    function addMessage(text, sender) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${sender}`;
+      messageDiv.innerHTML = `<div class="message-content">${escapeHtml(text)}</div>`;
+      chatMessages.appendChild(messageDiv);
+      scrollToBottom();
+    }
+
+    function scrollToBottom() {
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    chatInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+  </script>
+</body>
+</html>

@@ -5,6 +5,7 @@ import { createBehzodAgent } from "./src/agents/behzod";
 import { getSession } from "./src/session";
 import { Logger } from "./src/logger";
 import { BOT_CONFIG, SESSION_CONFIG } from "./src/constants";
+import { handleWebMessage } from "./src/web-chat";
 
 // Validate required environment variables
 const requiredEnvVars = [
@@ -130,8 +131,11 @@ async function main() {
       Logger.info(`🧠 [BRAIN] Behzod is thinking... (Thread: ${threadId.substring(0, 8)})`);
       const startTime = Date.now();
       
+      // Prefix Telegram user ID with 'telegram_' to separate from web users
+      const telegramUserId = `telegram_${userId}`;
+      
       const result = await behzodAgent.invoke(
-        { messages: [{ role: "user", content: `[User @${fromUser} (ID:${userId})] ${cleanText}` }] },
+        { messages: [{ role: "user", content: `[User @${fromUser} (ID:${telegramUserId})] ${cleanText}` }] },
         { configurable: { thread_id: threadId } }
       );
 
@@ -188,6 +192,43 @@ async function main() {
       return new Response(`<html><body style="background:#0a0a0a;color:#4ade80;font-family:monospace">
         <h2>🚀 BEHZOD-V2.1 LIVE LOGS</h2><div id="logs" style="white-space:pre-wrap">${history}</div>
         <script>setTimeout(()=>location.reload(),5000)</script></body></html>`, { headers: {"Content-Type":"text/html"}});
+    })
+    .get("/widget", () => Bun.file("public/chat-widget.html"))
+    .get("/demo", () => Bun.file("public/demo.html"))
+    .get("/behzod-widget.js", ({ set }) => {
+      set.headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+      set.headers["Pragma"] = "no-cache";
+      set.headers["Expires"] = "0";
+      return Bun.file("public/behzod-widget.js");
+    })
+    .get("/behzod-widget-crisp.js", ({ set }) => {
+      set.headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+      set.headers["Pragma"] = "no-cache";
+      set.headers["Expires"] = "0";
+      return Bun.file("public/behzod-widget-crisp.js");
+    })
+    .get("/agent-avatar.js", ({ set }) => {
+      set.headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+      set.headers["Pragma"] = "no-cache";
+      set.headers["Expires"] = "0";
+      return Bun.file("public/agent-avatar.js");
+    })
+    .post("/api/chat", async ({ body }: { body: any }) => {
+      try {
+        const { userId, message } = body;
+        
+        if (!userId || !message) {
+          return { error: "userId and message are required" };
+        }
+
+        Logger.info(`💬 [WEB] Message from ${userId}: ${message}`);
+        const response = await handleWebMessage(userId, message);
+        
+        return { response };
+      } catch (error: any) {
+        Logger.error(`Web chat API error: ${error.message}`);
+        return { error: "Internal server error" };
+      }
     })
     .get("/logs", ({ set }) => {
       set.headers["Content-Type"] = "text/event-stream";
